@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16
+    container_name: kijapa_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kijapa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kijapa_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-kijapa_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Scripts aqui rodam automaticamente só na 1ª vez que o volume é criado
+      # (banco vazio). Hoje cria o banco usado pelos testes automatizados.
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kijapa} -d ${POSTGRES_DB:-kijapa_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # verdade pronto pra aceitar conexões (não só "container rodando" — por
+  # isso `condition: service_healthy`, usando o healthcheck acima). As
+  # credenciais/segredos (SECRET_KEY, MASTER_USER_*, etc.) vêm do arquivo do
+  # próprio desenvolvedor (backend/.env — copiado de backend/.env.example,
+  # ver README.md), não duplicados aqui; só o DATABASE_URL é sobrescrito,
+  # porque dentro da rede do Docker o Postgres se chama "db", não
+  # "localhost" (a única diferença entre rodar nativo e rodar em container).
+  backend:
+    build:
+      context: ./backend
+    container_name: kijapa_backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-kijapa}:${POSTGRES_PASSWORD:-kijapa_dev_password}@db:5432/${POSTGRES_DB:-kijapa_db}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
+  # Build de produção do Vite servido por Nginx (ver frontend/Dockerfile) —
+  # roda na mesma porta (5173) do `npm run dev` usado no desenvolvimento do
+  # dia a dia, pra não exigir reconfigurar CORS_ORIGINS/bookmarks ao alternar
+  # entre os dois jeitos de rodar o projeto.
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+    container_name: kijapa_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

@@ -1,0 +1,41 @@
+# --- Segredos / ambiente ---
+.env
+.env.*
+!.env.example
+
+# --- Python (backend) ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# --- Node / Frontend ---
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+
+
+# --- Editor / SO ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Docker ---
+*.log
+
+# --- Banco de dados local (se usado fora do Docker) ---
+*.sqlite3
+pgdata/
+
+# --- Uploads locais ---
+backend/static/
